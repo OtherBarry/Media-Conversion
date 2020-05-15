@@ -115,9 +115,7 @@ class Video:
         command = 'ffprobe -hide_banner -loglevel fatal -show_entries stream=width,codec_name,bit_rate -of json "{}"'
         raw = subprocess.check_output(command.format(self.path))
         data = json.loads(raw)["streams"][0]
-        try:
-            rate = data["bit_rate"]
-        except KeyError:
+        if "bit_rate" not in data:
             bit_rate = 0
             for stream in json.loads(raw)["streams"]:
                 if "bit_rate" in stream.keys():
