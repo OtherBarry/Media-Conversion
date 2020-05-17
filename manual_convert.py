@@ -4,18 +4,14 @@ from videos import Video
 import datetime
 
 
-LOG_NAME = "Daily Log.txt"
-
-
 def log(line):
+    log_file = "logs/{} Log.txt".format(datetime.date.today())
     print(line)
-    with open(LOG_NAME, "a") as f:
+    with open(log_file, "a", encoding="utf8") as f:
         f.write(line + "\n")
 
 
-with open(LOG_NAME, "w") as f:
-    f.write("Converter Started at {}".format(datetime.datetime.now()) + "\n")
-
+log("Converter Started at {}".format(datetime.datetime.now()))
 media_libraries = {"tv": "T:/TV Shows/",
                    "movie": "W:/Movies/"}
 types = ["**/*." + x for x in Video.FILE_EXTENSIONS]
@@ -28,12 +24,14 @@ for media_type, media_dir in media_libraries.items():
             log("\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(vid.codec,
                                                                  vid.width,
                                                                  vid.rate))
-            log("\tParams: {}".format(vid.params))
-            if vid.transcode():
-                if vid.needs_transcoding:
+            if vid.needs_transcoding:
+                params = vid.params.copy()
+                params.pop("i")
+                log("\tParams: {}".format(params))
+                if vid.transcode():
                     log("\tSuccessfully Transcoded")
                 else:
-                    log("\tNo Transcode Required")
+                    log("\tTranscode Failed")
             else:
-                log("\tTranscode Failed")
+                log("\tNo Transcode Required")
             log("\n")

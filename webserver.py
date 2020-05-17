@@ -1,5 +1,6 @@
 from flask import Flask, request
 from videos import Video
+import datetime
 import json
 
 app = Flask(__name__)
@@ -23,47 +24,34 @@ def radarr():
 def sonarr():
     data = json.loads(request.data)
     if data["eventType"] == "Download":
-        id = data["episodeFile"]["id"]
-        path = data["series"]["path"] + "\\" + data["episodeFile"]["relativePath"]
+        folder = data["series"]["path"]
+        file = data["episodeFile"]["relativePath"]
+        path = folder + "\\" + file
+        log(path)
         vid = Video(path, "tv")
-        print("\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(vid.codec,
-                                                               vid.width,
-                                                                vid.rate))
-        print("\tParams: {}".format(vid.params))
-        if vid.transcode():
-            if vid.needs_transcoding:
-                print("\tSuccessfully Transcoded")
+        log("\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(vid.codec,
+                                                             vid.width,
+                                                             vid.rate))
+        if vid.needs_transcoding:
+            params = vid.params.copy()
+            params.pop("i")
+            log("\tParams: {}".format(params))
+            if vid.transcode():
+                log("\tSuccessfully Transcoded")
             else:
-                print("\tNo Transcode Required")
+                log("\tTranscode Failed")
         else:
-            print("\tTranscode Failed")
-        print("\n")
-        return "OK"
-    elif data["eventType"] == "Test":
-        print("This is a test")
-        return "OK"
+            log("\tNo Transcode Required")
+        log("\n")
 
+
+def log(line):
+    log_file = "logs/{} Webserver Log.txt".format(datetime.date.today())
+    print(line)
+    with open(log_file, "a", encoding="utf8") as f:
+        f.write(line + "\n")
 
 
 if __name__ == '__main__':
+    log("Converter Started at {}".format(datetime.datetime.now()))
     app.run()
-
-
-# {
-#     "movieFile": {
-#         "id": 2,
-#         "relativePath": "Finding Nemo (2003) DVD.mkv",
-#         "path": "Z:\\Finding.Nemo.2003.iNTERNAL.DVDRip.x264-REGRET\\regret-nemo.mkv",
-#     },
-# }
-#
-#
-#
-# # RADARR things to update from GET
-# {
-#   "sizeOnDisk": 0,
-#   "year": 2016,
-#   "path": "/path/to/Assassin's Creed (2016)",
-#   "profileId": 6,
-#   "qualityProfileId": 6,
-# }
