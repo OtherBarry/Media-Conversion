@@ -14,10 +14,9 @@ def radarr():
         relative_path = data["movieFile"]["relativePath"]
         path = data["movieFile"]["path"]
         print("{}. {} ({})".format(id, path, relative_path))
-        return "OK"
     elif data["eventType"] == "Test":
         print("This is a test")
-        return "OK"
+    return "OK"
 
 
 @app.route('/sonarr', methods=['POST'])
@@ -43,6 +42,7 @@ def sonarr():
         else:
             log("\tNo Transcode Required")
         log("\n")
+    return "OK"
 
 
 def log(line):
