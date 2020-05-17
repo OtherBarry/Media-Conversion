@@ -23,10 +23,11 @@ def radarr():
 def sonarr():
     data = json.loads(request.data)
     if data["eventType"] == "Download":
+        log("\nDownload received at {}".format(datetime.datetime.now()))
         folder = data["series"]["path"]
         file = data["episodeFile"]["relativePath"]
         path = folder + "\\" + file
-        log(path)
+        log("\tFile: " + file)
         vid = Video(path, "tv")
         log("\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(vid.codec,
                                                              vid.width,
@@ -39,9 +40,9 @@ def sonarr():
                 log("\tSuccessfully Transcoded")
             else:
                 log("\tTranscode Failed")
+            log("\tTranscode ended at {}".format(datetime.datetime.now()))
         else:
             log("\tNo Transcode Required")
-        log("\n")
     return "OK"
 
 
