@@ -79,7 +79,7 @@ class Video:
         if not self.needs_transcoding:
             return True
 
-        extension_length = len(Video.TARGET_EXTENSION)
+        extension_length = len(Video.TARGET_EXTENSION) + 1
         if self.was_target_extension:
             os.rename(self.path, self.path[:-extension_length])
             self.path = self.path[:-extension_length]
