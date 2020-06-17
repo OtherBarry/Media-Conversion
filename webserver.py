@@ -28,8 +28,12 @@ def sonarr():
         file = data["episodeFile"]["relativePath"]
         path = folder + "/" + file
         path = path.replace("/data/media/", "M:/")
+        if path.startswith("M:/Animated TV Shows/"):
+            type = "animation"
+        else:
+            type = "tv"
         log("\tFile: " + path)
-        vid = Video(path, "tv")
+        vid = Video(path, type)
         log("\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(vid.codec,
                                                              vid.width,
                                                              vid.rate))
