@@ -51,26 +51,17 @@ class Video:
         params = {"i": '"' + self.path + '"',
                   "c:v": "hevc_nvenc",
                   "c:a": "ac3",
-                  "preset": "hq",
-                  "2pass": "True",
+                  "preset": "slow",
                   "b:v": format_rate(target_rate)}
         needs_transcoding = True
 
         if self.rate < (target_rate * 1.05):
-            if self.width <= Video.TARGET_WIDTH:
-                if self.was_target_extension:
-                    needs_transcoding = False
-                else:
-                    params["c:v"] = "copy"
-                    params.pop("preset", None)
-                    params.pop("2pass", None)
-                    params.pop("b:v", None)
+            if self.was_target_extension:
+                needs_transcoding = False
             else:
-                params["vf"] = "scale={}:-1".format(Video.TARGET_WIDTH)
-                rate = min(self.rate, Video.BITRATES[self.type])
-                params["b:v"] = format_rate(rate)
-        elif self.width > 1920:
-            params["vf"] = "scale=1920:-1"
+                params["c:v"] = "copy"
+                params.pop("preset", None)
+                params.pop("b:v", None)
 
         self.params = params
         self.needs_transcoding = needs_transcoding
