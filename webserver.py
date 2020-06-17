@@ -26,8 +26,9 @@ def sonarr():
         log("\nDownload received at {}".format(datetime.datetime.now()))
         folder = data["series"]["path"]
         file = data["episodeFile"]["relativePath"]
-        path = folder + "\\" + file
-        log("\tFile: " + file)
+        path = folder + "/" + file
+        path = path.replace("/data/media/", "M:/")
+        log("\tFile: " + path)
         vid = Video(path, "tv")
         log("\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(vid.codec,
                                                              vid.width,
