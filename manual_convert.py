@@ -12,9 +12,11 @@ def log(line):
 
 
 log("Converter Started at {}".format(datetime.datetime.now()))
-media_libraries = {"tv": "M:/TV Shows/",
-                   "movie": "M:/Movies/",
-                   "animation": "M:/Animated TV Shows/"}
+media_libraries = {
+    "tv": "M:/TV Shows/",
+    "movie": "M:/Movies/",
+    "animation": "M:/Animated TV Shows/",
+}
 types = ["**/*." + x for x in Video.FILE_EXTENSIONS]
 for media_type, media_dir in media_libraries.items():
     for type in types:

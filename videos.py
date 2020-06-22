@@ -12,12 +12,14 @@ class Video:
                 "movie": 4000000,
                 "animation": 1000000}
 
-    FILE_EXTENSIONS = ("mkv",
-                       "m4v",
-                       "avi",
-                       "wmv",
-                       "mov",
-                       "mp4")
+    FILE_EXTENSIONS = (
+        "mkv",
+        "m4v",
+        "avi",
+        "wmv",
+        "mov",
+        "mp4",
+    )
 
     TARGET_EXTENSION = "mp4"
 
@@ -50,7 +52,7 @@ class Video:
         target_rate = int(rate_modifier * Video.BITRATES[self.type])
         params = {"c:v": "hevc_nvenc",
                   "c:a": "ac3",
-                  "c:s": "copy",
+                  "c:s": "mov_text",
                   "preset": "slow",
                   "b:v": format_rate(target_rate)}
         needs_transcoding = True
@@ -66,7 +68,7 @@ class Video:
         self.params = params
         self.needs_transcoding = needs_transcoding
 
-    def transcode(self):
+    def transcode(self, drop_subs=False):
         if not self.needs_transcoding:
             return True
 
@@ -80,6 +82,9 @@ class Video:
             output = '"{}.{}"'.format(self.path[:-extension_length],
                                       Video.TARGET_EXTENSION)
         args = '-i "{}" -map 0:a? -map 0:s? -map 0:v'.format(self.path)
+        if drop_subs:
+            args = args.replace(" -map 0:s?", "")
+            self.params.pop("c:s")
         for flag, value in self.params.items():
             args += " -" + flag + " " + value
         result = os.system(
@@ -100,10 +105,14 @@ class Video:
             self.path = output[1:-1]
             return True
         else:
+            if not drop_subs:
+                return self.transcode(drop_subs=True)
+            if self.was_target_extension:
+                os.rename(self.path, self.path + ".mp4")
             return False
 
     def get_data(self):
-        command = 'ffprobe -hide_banner -loglevel fatal -show_entries stream=width,codec_name,bit_rate -of json "{}"'
+        command = 'ffprobe -hide_banner -v fatal -select_streams v:0 -show_entries stream=width,codec_name,bit_rate -of json "{}"'
         raw = subprocess.check_output(command.format(self.path))
         data = json.loads(raw)["streams"][0]
         if "bit_rate" not in data:
