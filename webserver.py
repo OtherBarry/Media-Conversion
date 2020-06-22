@@ -14,9 +14,8 @@ def radarr():
     if data["eventType"] == "Download":
         log("\nDownload received from Radarr at {}".format(datetime.datetime.now()))
         id = data["movie"]["id"]
-        request = requests.get("http://192.168.0.10:7878/api/movie/{}".format(id),
-                                params={"apikey": "26c68f7dfb6d4ad481a33e32a4bf1579"})
-        data = request.json()
+        data = requests.get("http://192.168.0.10:7878/api/movie/{}".format(id),
+                            params={"apikey": "26c68f7dfb6d4ad481a33e32a4bf1579"}).json()
         if not data["downloaded"]:
             log("\tAPI Error: Movie not labelled 'downloaded'.")
             return "OK"
