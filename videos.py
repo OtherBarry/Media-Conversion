@@ -48,9 +48,9 @@ class Video:
 
         rate_modifier = (self.width / Video.TARGET_WIDTH)
         target_rate = int(rate_modifier * Video.BITRATES[self.type])
-        params = {"i": '"' + self.path + '"',
-                  "c:v": "hevc_nvenc",
+        params = {"c:v": "hevc_nvenc",
                   "c:a": "ac3",
+                  "c:s": "copy",
                   "preset": "slow",
                   "b:v": format_rate(target_rate)}
         needs_transcoding = True
@@ -79,7 +79,7 @@ class Video:
         else:
             output = '"{}.{}"'.format(self.path[:-extension_length],
                                       Video.TARGET_EXTENSION)
-        args = ""
+        args = '-i "{}" -map 0:a? -map 0:s? -map 0:v'.format(self.path)
         for flag, value in self.params.items():
             args += " -" + flag + " " + value
         result = os.system(
@@ -95,7 +95,7 @@ class Video:
                     result = os.system("del /f /q " + sys_path)
                     if result == 0:
                         break
-                    log("File in use, waiting 30 seconds...")
+                    print("File in use, waiting 30 seconds...")
                     time.sleep(30)
             self.path = output[1:-1]
             return True
