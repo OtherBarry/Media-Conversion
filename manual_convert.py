@@ -26,9 +26,7 @@ for media_type, media_dir in media_libraries.items():
                                                                  vid.width,
                                                                  vid.rate))
             if vid.needs_transcoding:
-                params = vid.params.copy()
-                params.pop("i")
-                log("\tParams: {}".format(params))
+                log("\tParams: {}".format(vid.params))
                 if vid.transcode():
                     log("\tSuccessfully Transcoded")
                 else:
