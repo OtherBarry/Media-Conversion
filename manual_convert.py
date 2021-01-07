@@ -18,8 +18,8 @@ media_libraries = {
     "animation": "M:/Animated TV Shows/",
 }
 types = ["**/*." + x for x in Video.FILE_EXTENSIONS]
-for media_type, media_dir in media_libraries.items():
-    for type in types:
+for type in types:
+    for media_type, media_dir in media_libraries.items():
         for file in glob.glob(media_dir + type, recursive=True):
             file = os.path.abspath(file)
             log(file)
