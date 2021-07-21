@@ -81,14 +81,14 @@ class Video:
         else:
             output = '"{}.{}"'.format(self.path[:-extension_length],
                                       Video.TARGET_EXTENSION)
-        args = '-i "{}" -map 0:a? -map 0:s? -map 0:v'.format(self.path)
+        args = '-i "{}" -map 0:a? -map 0:s? -map 0:V'.format(self.path)
         if drop_subs:
             args = args.replace(" -map 0:s?", "")
             self.params.pop("c:s")
         for flag, value in self.params.items():
             args += " -" + flag + " " + value
         result = os.system(
-            "ffmpeg -hide_banner -y -v fatal -stats {} {}".format(args, output)
+            "ffmpeg -hide_banner -y -v error -stats {} {}".format(args, output)
         )
         if result == 0:
             while True:
