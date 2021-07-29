@@ -54,7 +54,7 @@ class Webserver:
                 return "OK"
             path = data["path"] + "/" + data["movieFile"]["relativePath"]
             self._log("\tFile: " + path)
-            self.queue.enqueue(transcode_file, path, "movie")
+            self.queue.enqueue(transcode_file, path, "movie", job_timeout=3600)
             self._log("\tFile queued for encoding")
         elif data["eventType"] == "Test":
             print("This is a test")
