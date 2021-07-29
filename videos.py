@@ -1,16 +1,59 @@
 """Class for analysing and transcoding video files."""
 
-import os
-import time
+import datetime
 import json
+import os
 import subprocess
+import time
+
+FOLDER_TYPE_MAP = {
+    "Animated TV Shows": "animation",
+    "Movies": "movie",
+    "TV Shows": "tv",
+}
+
+
+def log(line):
+    log_file = "logs/{}_transcode_log.txt".format(datetime.date.today())
+    print(line)
+    with open(log_file, "a", encoding="utf8") as f:
+        f.write(line + "\n")
+
+
+def transcode_file(path: str, video_type: str = None) -> bool:
+    log(f"\nStarted at {datetime.datetime.now().strftime('%H:%M:%S')}")
+    start = time.time()
+    if video_type is None:
+        try:
+            folder = path.split("/")[3]
+        except IndexError:
+            folder = None
+        video_type = FOLDER_TYPE_MAP.get(folder)
+    if video_type is None:
+        log(f"Invalid path received: {path}")
+        return False
+
+    log(f"Received file {path}")
+    video = Video(path, video_type)
+    log(
+        "\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(
+            video.codec, video.width, video.rate
+        )
+    )
+    if video.needs_transcoding:
+        log("\tParams: {}".format(video.params))
+        if video.transcode():
+            log("\tSuccessfully Transcoded")
+        else:
+            log("\tTranscode Failed")
+        runtime = datetime.timedelta(seconds=int(round(time.time() - start)))
+        log(f"\tTime taken: {runtime}")
+    else:
+        log("\tNo Transcode Required")
 
 
 class Video:
-
-    BITRATES = {"tv": 2000000,
-                "movie": 4000000,
-                "animation": 1000000}
+    BITRATES = {"tv": 2000000, "movie": 4000000, "animation": 1000000}
 
     FILE_EXTENSIONS = (
         "mkv",
@@ -25,10 +68,10 @@ class Video:
 
     TARGET_WIDTH = 1920
 
-    def __init__(self, path, type):
+    def __init__(self, path, media_type):
         self.path = path
         self.was_target_extension = self.path.endswith("." + Video.TARGET_EXTENSION)
-        self.type = type
+        self.type = media_type
         self.get_details()
         self.get_params()
 
@@ -44,17 +87,18 @@ class Video:
             self.rate = 999999999
 
     def get_params(self):
-
         def format_rate(rate):
-            return str(int(rate/1000)) + "k"
+            return str(int(rate / 1000)) + "k"
 
-        rate_modifier = (self.width / Video.TARGET_WIDTH)
+        rate_modifier = self.width / Video.TARGET_WIDTH
         target_rate = int(rate_modifier * Video.BITRATES[self.type])
-        params = {"c:v": "hevc_nvenc",
-                  "c:a": "ac3",
-                  "c:s": "mov_text",
-                  "preset": "slow",
-                  "b:v": format_rate(target_rate)}
+        params = {
+            "c:v": "hevc_nvenc",
+            "c:a": "ac3",
+            "c:s": "mov_text",
+            "preset": "slow",
+            "b:v": format_rate(target_rate),
+        }
         needs_transcoding = True
 
         if self.rate < (target_rate * 1.05):
@@ -79,8 +123,9 @@ class Video:
             self.params["i"] = '"' + self.path + '"'
             output = '"{}.{}"'.format(self.path, Video.TARGET_EXTENSION)
         else:
-            output = '"{}.{}"'.format(self.path[:-extension_length],
-                                      Video.TARGET_EXTENSION)
+            output = '"{}.{}"'.format(
+                self.path[:-extension_length], Video.TARGET_EXTENSION
+            )
         args = '-i "{}" -map 0:a? -map 0:s? -map 0:V'.format(self.path)
         if drop_subs:
             args = args.replace(" -map 0:s?", "")
@@ -96,13 +141,13 @@ class Video:
                     os.remove(self.path)
                     break
                 except PermissionError:
-                    sys_path = self.path.replace("/", "\\")
-                    result = os.system("del /f /q " + sys_path)
+                    result = os.system("rm " + self.path)
                     if result == 0:
                         break
-                    print("File in use, waiting 30 seconds...")
+                    log("\tFile in use, waiting 30 seconds...")
                     time.sleep(30)
             self.path = output[1:-1]
+            subprocess.run(["chmod", "a+rw", self.path])
             return True
         else:
             if not drop_subs:
@@ -112,16 +157,16 @@ class Video:
             return False
 
     def get_data(self):
-        command = 'ffprobe -hide_banner -v fatal -select_streams v:0 -show_entries stream=width,codec_name,bit_rate -of json "{}"'
-        raw = subprocess.check_output(command.format(self.path))
+        command = f'ffprobe -hide_banner -loglevel fatal -select_streams v:0 -show_entries stream=width,codec_name,bit_rate -of json "{self.path}"'
+        raw = subprocess.check_output(command, shell=True)
         data = json.loads(raw)["streams"][0]
         if "bit_rate" not in data:
             bit_rate = 0
             for stream in json.loads(raw)["streams"]:
                 if "bit_rate" in stream.keys():
                     bit_rate -= int(stream["bit_rate"])
-            command = 'ffprobe -hide_banner -loglevel fatal -show_format -of json "{}"'
-            raw = subprocess.check_output(command.format(self.path))
+            command = f'ffprobe -hide_banner -loglevel fatal -show_format -of json "{self.path}"'
+            raw = subprocess.check_output(command, shell=True)
             bit_rate += int(json.loads(raw)["format"]["bit_rate"])
             data["bit_rate"] = str(bit_rate)
         return data
