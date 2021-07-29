@@ -1,82 +1,80 @@
-from flask import Flask, request
-from videos import Video
 import datetime
-import requests
 import json
-import os
 
-app = Flask(__name__)
+import requests
+from flask import Flask, request
+from redis import Redis
+from rq import Queue
+from werkzeug.serving import make_server
 
-
-@app.route('/radarr', methods=['POST'])
-def radarr():
-    data = json.loads(request.data)
-    if data["eventType"] == "Download":
-        log("\nDownload received from Radarr at {}".format(datetime.datetime.now()))
-        id = data["movie"]["id"]
-        data = requests.get("http://192.168.0.10:7878/api/movie/{}".format(id),
-                            params={"apikey": "26c68f7dfb6d4ad481a33e32a4bf1579"}).json()
-        if not data["downloaded"]:
-            log("\tAPI Error: Movie not labelled 'downloaded'.")
-            return "OK"
-        path = data["path"] + "/" + data["movieFile"]["relativePath"]
-        path = path.replace("/data/media/", "M:/")
-        log("\tFile: " + path)
-        vid = Video(path, "movie")
-        log("\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(vid.codec,
-                                                             vid.width,
-                                                             vid.rate))
-        if vid.needs_transcoding:
-            log("\tParams: {}".format(vid.params))
-            if vid.transcode():
-                log("\tSuccessfully Transcoded")
-            else:
-                log("\tTranscode Failed")
-            log("\tTranscode ended at {}".format(datetime.datetime.now()))
-        else:
-            log("\tNo Transcode Required")
-    elif data["eventType"] == "Test":
-        print("This is a test")
-    return "OK"
+from videos import transcode_file
 
 
-@app.route('/sonarr', methods=['POST'])
-def sonarr():
-    data = json.loads(request.data)
-    if data["eventType"] == "Download":
-        log("\nDownload received from Sonarr at {}".format(datetime.datetime.now()))
-        folder = data["series"]["path"]
-        file = data["episodeFile"]["relativePath"]
-        path = folder + "/" + file
-        path = path.replace("/data/media/", "M:/")
-        if path.startswith("M:/Animated TV Shows/"):
-            type = "animation"
-        else:
-            type = "tv"
-        log("\tFile: " + path)
-        vid = Video(path, type)
-        log("\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(vid.codec,
-                                                             vid.width,
-                                                             vid.rate))
-        if vid.needs_transcoding:
-            log("\tParams: {}".format(vid.params))
-            if vid.transcode():
-                log("\tSuccessfully Transcoded")
-            else:
-                log("\tTranscode Failed")
-            log("\tTranscode ended at {}".format(datetime.datetime.now()))
-        else:
-            log("\tNo Transcode Required")
-    return "OK"
+class Webserver:
+    def __init__(self):
+        self._flask_app = Flask("webserver")
+        self._add_urls_to_app()
+        self._server = make_server("127.0.0.1", 6969, self._flask_app)
+        self.queue = Queue(connection=Redis())
+        self._log("Webserver Started at {}".format(datetime.datetime.now()))
+
+    def _add_urls_to_app(self) -> None:
+        self._flask_app.add_url_rule(
+            rule="/radarr", view_func=self.radarr, methods=["POST"]
+        )
+        self._flask_app.add_url_rule(
+            rule="/sonarr", view_func=self.sonarr, methods=["POST"]
+        )
+
+    def start(self) -> None:
+        self._server.serve_forever()
+
+    def stop(self) -> None:
+        self._server.shutdown()
+
+    def _log(self, line):
+        log_file = "logs/{}_webserver.txt".format(datetime.date.today())
+        print(line)
+        with open(log_file, "a", encoding="utf8") as f:
+            f.write(line + "\n")
+
+    def radarr(self):
+        data = json.loads(request.data)
+        if data["eventType"] == "Download":
+            self._log(
+                f"\nDownload received from Radarr at {datetime.datetime.now().strftime('%H:%M:%S')}"
+            )
+            movie_id = data["movie"]["id"]
+            data = requests.get(
+                "http://192.168.0.10:7878/api/movie/{}".format(movie_id),
+                params={"apikey": "26c68f7dfb6d4ad481a33e32a4bf1579"},
+            ).json()
+            if not data["downloaded"]:
+                self._log("\tAPI Error: Movie not labelled 'downloaded'.")
+                return "OK"
+            path = data["path"] + "/" + data["movieFile"]["relativePath"]
+            self._log("\tFile: " + path)
+            self.queue.enqueue(transcode_file, path, "movie")
+            self._log("\tFile queued for encoding")
+        elif data["eventType"] == "Test":
+            print("This is a test")
+        return "OK"
+
+    def sonarr(self):
+        data = json.loads(request.data)
+        if data["eventType"] == "Download":
+            self._log(
+                f"\nDownload received from Sonarr at {datetime.datetime.now().strftime('%H:%M:%S')}"
+            )
+            folder = data["series"]["path"]
+            file = data["episodeFile"]["relativePath"]
+            path = folder + "/" + file
+            self._log("\tFile: " + path)
+            self.queue.enqueue(transcode_file, path)
+            self._log("\tFile queued for encoding")
+        return "OK"
 
 
-def log(line):
-    log_file = "logs/{} Webserver Log.txt".format(datetime.date.today())
-    print(line)
-    with open(log_file, "a", encoding="utf8") as f:
-        f.write(line + "\n")
-
-
-if __name__ == '__main__':
-    log("Webserver Started at {}".format(datetime.datetime.now()))
-    app.run()
+if __name__ == "__main__":
+    webserver = Webserver()
+    webserver.start()
