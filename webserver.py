@@ -15,7 +15,7 @@ class Webserver:
         self._flask_app = Flask("webserver")
         self._add_urls_to_app()
         self._server = make_server("127.0.0.1", 6969, self._flask_app)
-        self.queue = Queue(connection=Redis())
+        self.queue = Queue(connection=Redis(), default_timeout=3600)
         self._log("Webserver Started at {}".format(datetime.datetime.now()))
 
     def _add_urls_to_app(self) -> None:

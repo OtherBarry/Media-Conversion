@@ -23,7 +23,7 @@ def log(line):
 
 
 log("Converter Started at {}".format(datetime.datetime.now().strftime("%H:%M:%S")))
-q = Queue(connection=Redis())
+q = Queue(connection=Redis(), default_timeout=3600)
 for file_type in TYPES:
     for media_type, media_dir in MEDIA_LIBRARIES.items():
         for file in glob.glob(media_dir + file_type, recursive=True):
