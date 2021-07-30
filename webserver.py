@@ -2,7 +2,8 @@ import datetime
 import json
 
 import requests
-from flask import Flask, request
+import rq_dashboard
+from flask import Flask, request, redirect
 from redis import Redis
 from rq import Queue
 from werkzeug.serving import make_server
@@ -13,8 +14,10 @@ from videos import transcode_file
 class Webserver:
     def __init__(self):
         self._flask_app = Flask("webserver")
+        self._flask_app.config.from_object(rq_dashboard.default_settings)
+        self._flask_app.register_blueprint(rq_dashboard.blueprint, url_prefix="/rq")
         self._add_urls_to_app()
-        self._server = make_server("127.0.0.1", 6969, self._flask_app)
+        self._server = make_server("0.0.0.0", 6969, self._flask_app)
         self.queue = Queue(connection=Redis(), default_timeout=3600)
         self._log("Webserver Started at {}".format(datetime.datetime.now()))
 
@@ -24,6 +27,9 @@ class Webserver:
         )
         self._flask_app.add_url_rule(
             rule="/sonarr", view_func=self.sonarr, methods=["POST"]
+        )
+        self._flask_app.add_url_rule(
+            rule="/", view_func=self.redirect_home, methods=["GET"]
         )
 
     def start(self) -> None:
@@ -37,6 +43,9 @@ class Webserver:
         print(line)
         with open(log_file, "a", encoding="utf8") as f:
             f.write(line + "\n")
+
+    def redirect_home(self):
+        return redirect("/rq")
 
     def radarr(self):
         data = json.loads(request.data)
