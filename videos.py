@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import time
+from typing import Dict, Optional
 
 FOLDER_TYPE_MAP = {
     "Animated TV Shows": "animation",
@@ -13,22 +14,23 @@ FOLDER_TYPE_MAP = {
 }
 
 
-def log(line):
+def log(line: str) -> None:
     log_file = "logs/{}_transcode_log.txt".format(datetime.date.today())
     print(line)
     with open(log_file, "a", encoding="utf8") as f:
         f.write(line + "\n")
 
 
-def transcode_file(path: str, video_type: str = None) -> bool:
+def transcode_file(path: str, video_type: Optional[str] = None) -> bool:
     log(f"\nStarted at {datetime.datetime.now().strftime('%H:%M:%S')}")
     start = time.time()
     if video_type is None:
         try:
             folder = path.split("/")[3]
+            video_type = FOLDER_TYPE_MAP.get(folder)
         except IndexError:
-            folder = None
-        video_type = FOLDER_TYPE_MAP.get(folder)
+            video_type = None
+
     if video_type is None:
         log(f"Invalid path received: {path}")
         return False
@@ -50,6 +52,7 @@ def transcode_file(path: str, video_type: str = None) -> bool:
         log(f"\tTime taken: {runtime}")
     else:
         log("\tNo Transcode Required")
+    return True
 
 
 class Video:
@@ -66,26 +69,26 @@ class Video:
     TARGET_WIDTH = 1920
     TIMEOUT = 7200
 
-    def __init__(self, path, media_type):
+    def __init__(self, path: str, media_type: str) -> None:
         self.path = path
         self.was_target_extension = self.path.endswith("." + Video.TARGET_EXTENSION)
         self.type = media_type
         self.get_details()
         self.get_params()
 
-    def get_details(self):
+    def get_details(self) -> None:
         try:
             data = self.get_data()
             self.codec = data["codec_name"]
-            self.width = data["width"]
+            self.width = int(data["width"])
             self.rate = int(data["bit_rate"])
         except Exception:
             self.codec = "FFPROBE ERROR"
             self.width = Video.TARGET_WIDTH
             self.rate = 999999999
 
-    def get_params(self):
-        def format_rate(rate):
+    def get_params(self) -> None:
+        def format_rate(rate: int) -> str:
             return str(int(rate / 1000)) + "k"
 
         rate_modifier = self.width / Video.TARGET_WIDTH
@@ -110,7 +113,7 @@ class Video:
         self.params = params
         self.needs_transcoding = needs_transcoding
 
-    def transcode(self, drop_subs=False):
+    def transcode(self, drop_subs: bool = False) -> bool:
         if not self.needs_transcoding:
             return True
 
@@ -154,7 +157,7 @@ class Video:
                 os.rename(self.path, self.path + ".mp4")
             return False
 
-    def get_data(self):
+    def get_data(self) -> Dict[str, str]:
         command = f'ffprobe -hide_banner -loglevel fatal -select_streams v:0 -show_entries stream=width,codec_name,bit_rate -of json "{self.path}"'
         raw = subprocess.check_output(command, shell=True)
         data = json.loads(raw)["streams"][0]

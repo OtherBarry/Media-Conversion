@@ -3,10 +3,11 @@ import json
 
 import requests
 import rq_dashboard
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, jsonify
 from redis import Redis
 from rq import Queue
 from werkzeug.serving import make_server
+from werkzeug.wrappers.response import Response
 
 from videos import transcode_file, Video
 
@@ -38,16 +39,16 @@ class Webserver:
     def stop(self) -> None:
         self._server.shutdown()
 
-    def _log(self, line):
+    def _log(self, line: str) -> None:
         log_file = "logs/{}_webserver.txt".format(datetime.date.today())
         print(line)
         with open(log_file, "a", encoding="utf8") as f:
             f.write(line + "\n")
 
-    def redirect_home(self):
+    def redirect_home(self) -> Response:
         return redirect("/rq")
 
-    def radarr(self):
+    def radarr(self) -> Response:
         data = json.loads(request.data)
         if data["eventType"] == "Download":
             self._log(
@@ -60,16 +61,16 @@ class Webserver:
             ).json()
             if not data["downloaded"]:
                 self._log("\tAPI Error: Movie not labelled 'downloaded'.")
-                return "OK"
+                return jsonify({"result": "success"})
             path = data["path"] + "/" + data["movieFile"]["relativePath"]
             self._log("\tFile: " + path)
             self.queue.enqueue(transcode_file, path, "movie", job_timeout=Video.TIMEOUT)
             self._log("\tFile queued for encoding")
         elif data["eventType"] == "Test":
             print("This is a test")
-        return "OK"
+        return jsonify({"result": "success"})
 
-    def sonarr(self):
+    def sonarr(self) -> Response:
         data = json.loads(request.data)
         if data["eventType"] == "Download":
             self._log(
@@ -81,7 +82,7 @@ class Webserver:
             self._log("\tFile: " + path)
             self.queue.enqueue(transcode_file, path, job_timeout=Video.TIMEOUT)
             self._log("\tFile queued for encoding")
-        return "OK"
+        return jsonify({"result": "success"})
 
 
 if __name__ == "__main__":

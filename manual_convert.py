@@ -15,7 +15,7 @@ MEDIA_LIBRARIES = {
 TYPES = ["**/*." + x for x in Video.FILE_EXTENSIONS]
 
 
-def log(line):
+def log(line: str) -> None:
     log_file = "logs/{}_bulk_transcode.txt".format(datetime.date.today())
     print(line)
     with open(log_file, "a", encoding="utf8") as f:
