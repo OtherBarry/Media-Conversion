@@ -8,7 +8,7 @@ from redis import Redis
 from rq import Queue
 from werkzeug.serving import make_server
 
-from videos import transcode_file
+from videos import transcode_file, Video
 
 
 class Webserver:
@@ -18,7 +18,7 @@ class Webserver:
         self._flask_app.register_blueprint(rq_dashboard.blueprint, url_prefix="/rq")
         self._add_urls_to_app()
         self._server = make_server("0.0.0.0", 6969, self._flask_app)
-        self.queue = Queue(connection=Redis(), default_timeout=3600)
+        self.queue = Queue(connection=Redis(), default_timeout=Video.TIMEOUT)
         self._log("Webserver Started at {}".format(datetime.datetime.now()))
 
     def _add_urls_to_app(self) -> None:
@@ -63,7 +63,7 @@ class Webserver:
                 return "OK"
             path = data["path"] + "/" + data["movieFile"]["relativePath"]
             self._log("\tFile: " + path)
-            self.queue.enqueue(transcode_file, path, "movie", job_timeout=3600)
+            self.queue.enqueue(transcode_file, path, "movie", job_timeout=Video.TIMEOUT)
             self._log("\tFile queued for encoding")
         elif data["eventType"] == "Test":
             print("This is a test")
@@ -79,7 +79,7 @@ class Webserver:
             file = data["episodeFile"]["relativePath"]
             path = folder + "/" + file
             self._log("\tFile: " + path)
-            self.queue.enqueue(transcode_file, path)
+            self.queue.enqueue(transcode_file, path, job_timeout=Video.TIMEOUT)
             self._log("\tFile queued for encoding")
         return "OK"
 

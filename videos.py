@@ -54,7 +54,6 @@ def transcode_file(path: str, video_type: str = None) -> bool:
 
 class Video:
     BITRATES = {"tv": 2000000, "movie": 4000000, "animation": 1000000}
-
     FILE_EXTENSIONS = (
         "mkv",
         "m4v",
@@ -63,10 +62,9 @@ class Video:
         "mov",
         "mp4",
     )
-
     TARGET_EXTENSION = "mp4"
-
     TARGET_WIDTH = 1920
+    TIMEOUT = 7200
 
     def __init__(self, path, media_type):
         self.path = path

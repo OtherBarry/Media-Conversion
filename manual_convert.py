@@ -23,10 +23,10 @@ def log(line):
 
 
 log("Converter Started at {}".format(datetime.datetime.now().strftime("%H:%M:%S")))
-q = Queue(connection=Redis(), default_timeout=3600)
+q = Queue(connection=Redis(), default_timeout=Video.TIMEOUT)
 for file_type in TYPES:
     for media_type, media_dir in MEDIA_LIBRARIES.items():
         for file in glob.glob(media_dir + file_type, recursive=True):
             file = os.path.abspath(file)
             log(f"Queued for transcoding: {file}")
-            q.enqueue(transcode_file, file, media_type, job_timeout=3600)
+            q.enqueue(transcode_file, file, media_type, job_timeout=Video.TIMEOUT)
