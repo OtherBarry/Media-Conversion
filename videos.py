@@ -67,7 +67,7 @@ class Video:
     )
     TARGET_EXTENSION = "mp4"
     TARGET_WIDTH = 1920
-    TIMEOUT = 7200
+    TIMEOUT = 20000
 
     def __init__(self, path: str, media_type: str) -> None:
         self.path = path
