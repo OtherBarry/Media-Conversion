@@ -2,10 +2,13 @@
 
 import datetime
 import json
+import logging
 import os
 import subprocess
 import time
 from typing import Dict, Optional
+
+from logging.handlers import WatchedFileHandler
 
 FOLDER_TYPE_MAP = {
     "Animated TV Shows": "animation",
@@ -13,16 +16,19 @@ FOLDER_TYPE_MAP = {
     "TV Shows": "tv",
 }
 
+log_handler = WatchedFileHandler("/var/log/transcoder/transcoder.log")
+formatter = logging.Formatter(
+    "%(asctime)s - [%(levelname)s] %(message)s", "%b %d %H:%M:%S"
+)
+log_handler.setFormatter(formatter)
+logger = logging.getLogger()
+logger.addHandler(log_handler)
+logger.setLevel(logging.DEBUG)
 
-def log(line: str) -> None:
-    log_file = "logs/{}_transcode_log.txt".format(datetime.date.today())
-    print(line)
-    with open(log_file, "a", encoding="utf8") as f:
-        f.write(line + "\n")
+LOGGER = logger
 
 
 def transcode_file(path: str, video_type: Optional[str] = None) -> bool:
-    log(f"\nStarted at {datetime.datetime.now().strftime('%H:%M:%S')}")
     start = time.time()
     if video_type is None:
         try:
@@ -32,26 +38,26 @@ def transcode_file(path: str, video_type: Optional[str] = None) -> bool:
             video_type = None
 
     if video_type is None:
-        log(f"Invalid path received: {path}")
+        logger.error(f"Invalid path received: {path}")
         return False
 
-    log(f"Received file {path}")
+    logger.info(f"Received file {path}")
     video = Video(path, video_type)
-    log(
+    logger.debug(
         "\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(
             video.codec, video.width, video.rate
         )
     )
     if video.needs_transcoding:
-        log("\tParams: {}".format(video.params))
+        logger.debug("\tParams: {}".format(video.params))
         if video.transcode():
-            log("\tSuccessfully Transcoded")
+            logger.info("\tSuccessfully Transcoded")
         else:
-            log("\tTranscode Failed")
+            logger.error("\tTranscode Failed")
         runtime = datetime.timedelta(seconds=int(round(time.time() - start)))
-        log(f"\tTime taken: {runtime}")
+        logger.debug(f"\tTime taken: {runtime}")
     else:
-        log("\tNo Transcode Required")
+        logger.info("\tNo Transcode Required")
     return True
 
 
@@ -145,7 +151,7 @@ class Video:
                     result = os.system("rm " + self.path)
                     if result == 0:
                         break
-                    log("\tFile in use, waiting 30 seconds...")
+                    logger.info("\tFile in use, waiting 30 seconds...")
                     time.sleep(30)
             self.path = output[1:-1]
             subprocess.run(["chmod", "a+rw", self.path])
