@@ -44,7 +44,7 @@ def transcode_file(path: str, video_type: Optional[str] = None) -> bool:
     logger.info(f"Received file {path}")
     video = Video(path, video_type)
     logger.debug(
-        "\tCodec: {}\n\tWidth: {}\n\tBitrate: {}".format(
+        "\tCodec: {} | Width: {} | Bitrate: {}".format(
             video.codec, video.width, video.rate
         )
     )
