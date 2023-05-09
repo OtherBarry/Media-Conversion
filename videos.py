@@ -115,7 +115,7 @@ class Video:
         if rate >= (target_rate * 1.05):
             params["c:v"] = "hevc_nvenc"
             params["preset"] = "slow"
-            params["b:v"] = format_rate(rate)
+            params["b:v"] = format_rate(target_rate)
         else:
             if self.was_target_extension:
                 return None
