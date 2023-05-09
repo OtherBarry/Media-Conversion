@@ -1,5 +1,3 @@
-"""Class for analysing and transcoding video files."""
-
 import datetime
 import json
 import logging
@@ -13,6 +11,7 @@ FOLDER_TYPE_MAP = {
     "Movies": "movie",
     "TV Shows": "tv",
 }
+FILE_IN_USE_DELAY = 5
 
 
 def get_video_type(path: str) -> str | None:
@@ -30,6 +29,21 @@ def format_rate(rate: int) -> str:
 def extension_matches(a: str, b: str) -> bool:
     a, b = a.lower(), b.lower()
     return a == b or ("." + a) == b or a == ("." + b)
+
+
+def _delete_old_file(path: str, max_attempts: int = 5) -> None:
+    attempts = 0
+    while attempts < max_attempts:
+        attempts += 1
+        try:
+            os.remove(path)
+        except PermissionError:
+            result = subprocess.run("rm " + path)
+            if result.returncode == 0:
+                break
+            time.sleep(FILE_IN_USE_DELAY)
+        else:
+            break
 
 
 log_handler = WatchedFileHandler("/var/log/transcoder/transcoder.log")
@@ -53,7 +67,6 @@ class Video:
     TARGET_EXTENSION = "mp4"
     TARGET_WIDTH = 1920
 
-    FILE_IN_USE_DELAY = 5
     TEMP_EXTENSION = "tmp"
     TIMEOUT = 20000
 
@@ -66,6 +79,9 @@ class Video:
         self.type = media_type
         self.indent = indent
 
+    LOGGER.setLevel(LOG_LEVEL)
+    LOGGER.addHandler(log_handler)
+
     def _log(self, message: str, level: int = logging.INFO) -> None:
         self.LOGGER.log(level, self.indent + message)
 
@@ -73,18 +89,39 @@ class Video:
         bit_rate = 0
         for stream in streams:
             bit_rate -= int(stream.get("bit_rate", 0))
-        command = (
-            f'ffprobe -hide_banner -loglevel fatal -show_format -of json "{self.path}"'
-        )
-        raw = subprocess.check_output(command, shell=True)
+        args = [
+            "ffprobe",
+            "-hide_banner",
+            "-loglevel",
+            "fatal",
+            "-show_format",
+            "-of",
+            "json",
+            self.path,
+        ]
+        raw = subprocess.check_output(args)
         bit_rate += int(json.loads(raw)["format"]["bit_rate"])
         return bit_rate
 
     def _get_file_info(self) -> dict[str, str]:
         # TODO: Parse json data using pydantic
-
-        command = f'ffprobe -hide_banner -loglevel fatal -select_streams v:0 -show_entries stream=width,codec_name,bit_rate -of json "{self.path}"'
-        raw_data = subprocess.check_output(command, shell=True)
+        args = [
+            "ffprobe",
+            "-hide_banner",
+            "-loglevel",
+            "fatal",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,codec_name,bit_rate",
+            "-of",
+            "json",
+            self.path,
+        ]
+        try:
+            raw_data = subprocess.check_output(args)
+        except subprocess.CalledProcessError:
+            return {}
         streams = json.loads(raw_data)["streams"]
         data = streams[0]
         if "bit_rate" not in data:
@@ -123,21 +160,6 @@ class Video:
                 params["c:v"] = "copy"
         return params
 
-    def _delete_old_file(self, max_attempts: int = 5) -> None:
-        attempts = 0
-        while attempts < max_attempts:
-            attempts += 1
-            try:
-                os.remove(self.path)
-            except PermissionError:
-                result = subprocess.run("rm " + self.path)
-                if result.returncode == 0:
-                    break
-                self._log(f"File in use, waiting {self.FILE_IN_USE_DELAY} seconds...")
-                time.sleep(self.FILE_IN_USE_DELAY)
-            else:
-                break
-
     def transcode(self, drop_subs: bool = False) -> bool:
         # TODO: timeout? could do on subprocess.run
 
@@ -147,6 +169,8 @@ class Video:
         if params is None:
             self._log("No Transcode Required")
             return False
+        if drop_subs:
+            params.pop("c:s")
         self._log(f"Params: {params}", level=logging.DEBUG)
 
         base_path, extension = os.path.splitext(self.path)
@@ -159,47 +183,63 @@ class Video:
             os.rename(self.path, temp_path)
             self.path = temp_path
 
+        output_path = f"{base_path}.{Video.TARGET_EXTENSION}"
         success = True
         try:
-            output_path = f"{base_path}.{Video.TARGET_EXTENSION}"
-            params["i"] = f'"{self.path}"'
-            args = "-map 0:a? -map 0:V"
-            if drop_subs:
-                params.pop("c:s")
-            else:
-                args += " -map 0:s?"
+            args = [
+                "ffmpeg",
+                "-hide_banner",
+                "-y",
+                "-v",
+                "error",
+                "-stats",
+                "-i",
+                self.path,
+                "-map",
+                "0:a?",
+                "-map",
+                "0:V",
+            ]
+            if not drop_subs:
+                args += ["-map", "0:s?"]
             for flag, value in params.items():
-                args += " -" + flag + " " + value
+                args += ["-" + flag, value]
+            args += [output_path]
 
-            result = subprocess.run(
-                f"ffmpeg -hide_banner -y -v error -stats {args} {output_path}"
-            )
+            result = subprocess.run(args)
             if result.returncode == 0:
                 self._log("Successfully Transcoded")
-                self._delete_old_file()
+                _delete_old_file(self.path)
                 subprocess.run(["chmod", "a+rw", output_path])
             else:
-                raise Exception("Transcode Failed")  # TODO: Better exception
-        except Exception:
+                # TODO: Better exception
+                raise Exception(
+                    "Transcode Failed with command: ",
+                    subprocess.list2cmdline(result.args),
+                )
+        except BaseException:
             success = False
-            self._log("\tTranscode Failed", level=logging.ERROR)
+            self._log("Transcode Failed", level=logging.ERROR)
+            if os.path.exists(output_path):
+                self._log("Deleting partial output file")
+                _delete_old_file(output_path)
             base_path, extension = os.path.splitext(self.path)
             if extension_matches(extension, Video.TEMP_EXTENSION) and os.path.exists(
                 self.path
             ):
                 new_path = f"{base_path}.{Video.TARGET_EXTENSION}"
                 self._log(
-                    f"\tRenaming file from {self.path} to {new_path}",
+                    f"Renaming file from {self.path} to {new_path}",
                     level=logging.DEBUG,
                 )
                 os.rename(self.path, new_path)
                 self.path = new_path
             if not drop_subs:
-                self._log("\tRetrying without subtitles")
+                self._log("Retrying without subtitles")
                 return self.transcode(drop_subs=True)
         finally:
             runtime = datetime.timedelta(seconds=int(round(time.time() - start)))
-            self._log(f"\tTime taken: {runtime}", level=logging.DEBUG)
+            self._log(f"Time taken: {runtime}", level=logging.DEBUG)
         return success
 
     @classmethod
