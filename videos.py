@@ -55,14 +55,6 @@ log_handler.setFormatter(formatter)
 
 class Video:
     BITRATES = {"tv": 2000000, "movie": 4000000, "animation": 1000000}
-    FILE_EXTENSIONS = (
-        "mkv",
-        "m4v",
-        "avi",
-        "wmv",
-        "mov",
-        "mp4",
-    )
 
     TARGET_EXTENSION = "mp4"
     TARGET_WIDTH = 1920

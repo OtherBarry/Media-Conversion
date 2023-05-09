@@ -11,7 +11,15 @@ MEDIA_LIBRARIES = {
     "movie": "/data/media/Movies/",
     "animation": "/data/media/Animated TV Shows/",
 }
-TYPES = ["**/*." + x for x in Video.FILE_EXTENSIONS]
+FILE_EXTENSIONS = (
+    "mkv",
+    "m4v",
+    "avi",
+    "wmv",
+    "mov",
+    "mp4",
+)
+TYPES = ["**/*." + x for x in FILE_EXTENSIONS]
 
 Video.LOGGER.info("Starting manual conversion")
 q = Queue(connection=Redis(), default_timeout=Video.TIMEOUT)
