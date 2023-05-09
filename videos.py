@@ -6,8 +6,6 @@ import logging
 import os
 import subprocess
 import time
-from typing import Dict, Optional
-
 from logging.handlers import WatchedFileHandler
 
 FOLDER_TYPE_MAP = {
@@ -16,49 +14,29 @@ FOLDER_TYPE_MAP = {
     "TV Shows": "tv",
 }
 
+
+def get_video_type(path: str) -> str | None:
+    try:
+        folder = path.split("/")[3]
+        return FOLDER_TYPE_MAP.get(folder)
+    except IndexError:
+        return None
+
+
+def format_rate(rate: int) -> str:
+    return str(int(rate / 1000)) + "k"
+
+
+def extension_matches(a: str, b: str) -> bool:
+    a, b = a.lower(), b.lower()
+    return a == b or ("." + a) == b or a == ("." + b)
+
+
 log_handler = WatchedFileHandler("/var/log/transcoder/transcoder.log")
 formatter = logging.Formatter(
     "%(asctime)s - [%(levelname)s] %(message)s", "%b %d %H:%M:%S"
 )
 log_handler.setFormatter(formatter)
-logger = logging.getLogger()
-logger.addHandler(log_handler)
-logger.setLevel(logging.DEBUG)
-
-LOGGER = logger
-
-
-def transcode_file(path: str, video_type: Optional[str] = None) -> bool:
-    start = time.time()
-    if video_type is None:
-        try:
-            folder = path.split("/")[3]
-            video_type = FOLDER_TYPE_MAP.get(folder)
-        except IndexError:
-            video_type = None
-
-    if video_type is None:
-        logger.error(f"Invalid path received: {path}")
-        return False
-
-    logger.info(f"Received file {path}")
-    video = Video(path, video_type)
-    logger.debug(
-        "\tCodec: {} | Width: {} | Bitrate: {}".format(
-            video.codec, video.width, video.rate
-        )
-    )
-    if video.needs_transcoding:
-        logger.debug("\tParams: {}".format(video.params))
-        if video.transcode():
-            logger.info("\tSuccessfully Transcoded")
-        else:
-            logger.error("\tTranscode Failed")
-        runtime = datetime.timedelta(seconds=int(round(time.time() - start)))
-        logger.debug(f"\tTime taken: {runtime}")
-    else:
-        logger.info("\tNo Transcode Required")
-    return True
 
 
 class Video:
@@ -71,109 +49,166 @@ class Video:
         "mov",
         "mp4",
     )
+
     TARGET_EXTENSION = "mp4"
     TARGET_WIDTH = 1920
+
+    FILE_IN_USE_DELAY = 5
+    TEMP_EXTENSION = "tmp"
     TIMEOUT = 20000
 
-    def __init__(self, path: str, media_type: str) -> None:
+    LOG_LEVEL = logging.DEBUG
+    LOGGER = logging.getLogger()
+
+    def __init__(self, path: str, media_type: str, indent: str = "") -> None:
         self.path = path
         self.was_target_extension = self.path.endswith("." + Video.TARGET_EXTENSION)
         self.type = media_type
-        self.get_details()
-        self.get_params()
+        self.indent = indent
 
-    def get_details(self) -> None:
+    def _log(self, message: str, level: int = logging.INFO) -> None:
+        self.LOGGER.log(level, self.indent + message)
+
+    def _manual_bitrate(self, streams: list[dict[str, str]]) -> int:
+        bit_rate = 0
+        for stream in streams:
+            bit_rate -= int(stream.get("bit_rate", 0))
+        command = (
+            f'ffprobe -hide_banner -loglevel fatal -show_format -of json "{self.path}"'
+        )
+        raw = subprocess.check_output(command, shell=True)
+        bit_rate += int(json.loads(raw)["format"]["bit_rate"])
+        return bit_rate
+
+    def _get_file_info(self) -> dict[str, str]:
+        # TODO: Parse json data using pydantic
+
+        command = f'ffprobe -hide_banner -loglevel fatal -select_streams v:0 -show_entries stream=width,codec_name,bit_rate -of json "{self.path}"'
+        raw_data = subprocess.check_output(command, shell=True)
+        streams = json.loads(raw_data)["streams"]
+        data = streams[0]
+        if "bit_rate" not in data:
+            data["bit_rate"] = str(self._manual_bitrate(streams))
+        self._log(
+            f"Codec: {data.get('codec_name', 'unknown')}"
+            + f" | Width: {data.get('width', 'unknown')}"
+            + f" | Bitrate: {data.get('bit_rate', 'unknown')}",
+            level=logging.DEBUG,
+        )
+        return data  # type: ignore[no-any-return]
+
+    def _get_params(self) -> dict[str, str] | None:
+        file_info = self._get_file_info()
         try:
-            data = self.get_data()
-            self.codec = data["codec_name"]
-            self.width = int(data["width"])
-            self.rate = int(data["bit_rate"])
-        except Exception:
-            self.codec = "FFPROBE ERROR"
-            self.width = Video.TARGET_WIDTH
-            self.rate = 999999999
+            width = int(file_info["width"])
+            rate = int(file_info["bit_rate"])
+        except KeyError:
+            raise Exception("Unable to determine file info")  # TODO: Better exception
 
-    def get_params(self) -> None:
-        def format_rate(rate: int) -> str:
-            return str(int(rate / 1000)) + "k"
-
-        rate_modifier = self.width / Video.TARGET_WIDTH
+        rate_modifier = width / Video.TARGET_WIDTH
         target_rate = int(rate_modifier * Video.BITRATES[self.type])
         params = {
-            "c:v": "hevc_nvenc",
             "c:a": "ac3",
-            "c:s": "mov_text",
-            "preset": "slow",
-            "b:v": format_rate(target_rate),
+            "c:s": "mov_text",  # TODO: Add support for other subtitle types
         }
-        needs_transcoding = True
 
-        if self.rate < (target_rate * 1.05):
+        if rate >= (target_rate * 1.05):
+            params["c:v"] = "hevc_nvenc"
+            params["preset"] = "slow"
+            params["b:v"] = format_rate(rate)
+        else:
             if self.was_target_extension:
-                needs_transcoding = False
+                return None
             else:
                 params["c:v"] = "copy"
-                params.pop("preset", None)
-                params.pop("b:v", None)
+        return params
 
-        self.params = params
-        self.needs_transcoding = needs_transcoding
+    def _delete_old_file(self, max_attempts: int = 5) -> None:
+        attempts = 0
+        while attempts < max_attempts:
+            attempts += 1
+            try:
+                os.remove(self.path)
+            except PermissionError:
+                result = subprocess.run("rm " + self.path)
+                if result.returncode == 0:
+                    break
+                self._log(f"File in use, waiting {self.FILE_IN_USE_DELAY} seconds...")
+                time.sleep(self.FILE_IN_USE_DELAY)
+            else:
+                break
 
     def transcode(self, drop_subs: bool = False) -> bool:
-        if not self.needs_transcoding:
-            return True
+        # TODO: timeout? could do on subprocess.run
 
-        extension_length = len(Video.TARGET_EXTENSION) + 1
-        if self.was_target_extension:
-            os.rename(self.path, self.path[:-extension_length])
-            self.path = self.path[:-extension_length]
-            self.params["i"] = '"' + self.path + '"'
-            output = '"{}.{}"'.format(self.path, Video.TARGET_EXTENSION)
-        else:
-            output = '"{}.{}"'.format(
-                self.path[:-extension_length], Video.TARGET_EXTENSION
-            )
-        args = '-i "{}" -map 0:a? -map 0:s? -map 0:V'.format(self.path)
-        if drop_subs:
-            args = args.replace(" -map 0:s?", "")
-            self.params.pop("c:s")
-        for flag, value in self.params.items():
-            args += " -" + flag + " " + value
-        result = os.system(
-            "ffmpeg -hide_banner -y -v error -stats {} {}".format(args, output)
-        )
-        if result == 0:
-            while True:
-                try:
-                    os.remove(self.path)
-                    break
-                except PermissionError:
-                    result = os.system("rm " + self.path)
-                    if result == 0:
-                        break
-                    logger.info("\tFile in use, waiting 30 seconds...")
-                    time.sleep(30)
-            self.path = output[1:-1]
-            subprocess.run(["chmod", "a+rw", self.path])
-            return True
-        else:
-            if not drop_subs:
-                return self.transcode(drop_subs=True)
-            if self.was_target_extension:
-                os.rename(self.path, self.path + ".mp4")
+        start = time.time()
+
+        params = self._get_params()
+        if params is None:
+            self._log("No Transcode Required")
             return False
+        self._log(f"Params: {params}", level=logging.DEBUG)
 
-    def get_data(self) -> Dict[str, str]:
-        command = f'ffprobe -hide_banner -loglevel fatal -select_streams v:0 -show_entries stream=width,codec_name,bit_rate -of json "{self.path}"'
-        raw = subprocess.check_output(command, shell=True)
-        data = json.loads(raw)["streams"][0]
-        if "bit_rate" not in data:
-            bit_rate = 0
-            for stream in json.loads(raw)["streams"]:
-                if "bit_rate" in stream.keys():
-                    bit_rate -= int(stream["bit_rate"])
-            command = f'ffprobe -hide_banner -loglevel fatal -show_format -of json "{self.path}"'
-            raw = subprocess.check_output(command, shell=True)
-            bit_rate += int(json.loads(raw)["format"]["bit_rate"])
-            data["bit_rate"] = str(bit_rate)
-        return data
+        base_path, extension = os.path.splitext(self.path)
+        if extension_matches(extension, Video.TARGET_EXTENSION):
+            temp_path = f"{base_path}.{self.TEMP_EXTENSION}"
+            self._log(
+                f"Renaming file to {temp_path} as file already has target extension",
+                level=logging.DEBUG,
+            )
+            os.rename(self.path, temp_path)
+            self.path = temp_path
+
+        success = True
+        try:
+            output_path = f"{base_path}.{Video.TARGET_EXTENSION}"
+            params["i"] = f'"{self.path}"'
+            args = "-map 0:a? -map 0:V"
+            if drop_subs:
+                params.pop("c:s")
+            else:
+                args += " -map 0:s?"
+            for flag, value in params.items():
+                args += " -" + flag + " " + value
+
+            result = subprocess.run(
+                f"ffmpeg -hide_banner -y -v error -stats {args} {output_path}"
+            )
+            if result.returncode == 0:
+                self._log("Successfully Transcoded")
+                self._delete_old_file()
+                subprocess.run(["chmod", "a+rw", output_path])
+            else:
+                raise Exception("Transcode Failed")  # TODO: Better exception
+        except Exception:
+            success = False
+            self._log("\tTranscode Failed", level=logging.ERROR)
+            base_path, extension = os.path.splitext(self.path)
+            if extension_matches(extension, Video.TEMP_EXTENSION) and os.path.exists(
+                self.path
+            ):
+                new_path = f"{base_path}.{Video.TARGET_EXTENSION}"
+                self._log(
+                    f"\tRenaming file from {self.path} to {new_path}",
+                    level=logging.DEBUG,
+                )
+                os.rename(self.path, new_path)
+                self.path = new_path
+            if not drop_subs:
+                self._log("\tRetrying without subtitles")
+                return self.transcode(drop_subs=True)
+        finally:
+            runtime = datetime.timedelta(seconds=int(round(time.time() - start)))
+            self._log(f"\tTime taken: {runtime}", level=logging.DEBUG)
+        return success
+
+    @classmethod
+    def transcode_from_path(cls, path: str, video_type: str | None = None) -> bool:
+        if video_type is None:
+            video_type = get_video_type(path)
+        if video_type is None:
+            cls.LOGGER.error(f"Invalid path received: {path}")
+            return False
+        cls.LOGGER.info(f"Received file {path}")
+        video = Video(path, video_type, indent="\t")
+        return video.transcode()
