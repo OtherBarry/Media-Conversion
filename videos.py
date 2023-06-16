@@ -139,6 +139,7 @@ class Video:
         params = {
             "c:a": "ac3",
             "c:s": "mov_text",  # TODO: Add support for other subtitle types
+            "movflags": "+faststart",  # Moves moov atom to start of file
         }
 
         if rate >= (target_rate * 1.05):
