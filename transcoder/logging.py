@@ -13,7 +13,9 @@ def configure_logging() -> None:
         interval=1,
         backupCount=7,
     )
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     file_handler.setFormatter(formatter)
     stream_handler.setFormatter(formatter)
     logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, stream_handler])
