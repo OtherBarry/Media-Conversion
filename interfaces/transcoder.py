@@ -71,17 +71,13 @@ class Video:
     TEMP_EXTENSION = "tmp"
     TIMEOUT = 20000
 
-    LOG_LEVEL = logging.DEBUG
-    LOGGER = logging.getLogger()
+    LOGGER = logging.getLogger(__name__)
 
     def __init__(self, path: str, media_type: str, indent: str = "") -> None:
         self.path = path
         self.was_target_extension = self.path.endswith("." + Video.TARGET_EXTENSION)
         self.type = media_type
         self.indent = indent
-
-    LOGGER.setLevel(LOG_LEVEL)
-    LOGGER.addHandler(log_handler)
 
     def _log(self, message: str, level: int = logging.INFO) -> None:
         self.LOGGER.log(level, self.indent + message)
