@@ -1,0 +1,26 @@
+[project]
+name = "transcoder"
+version = "0.1.0"
+description = "Transcoder for media files using Flask and RQ"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dependency-injector>=4.48.3",
+    "fastapi>=0.135.1",
+    "flask==2.2.4",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.13.1",
+    "redis==4.5.5",
+    "requests==2.30.0",
+    "rq==1.14.1",
+    "rq-dashboard==0.6.1",
+    "typer>=0.24.1",
+    "uvicorn>=0.41.0",
+    "werkzeug==2.3.4",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "ruff>=0.15.4",
+]

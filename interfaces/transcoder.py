@@ -6,6 +6,8 @@ import subprocess
 import time
 from logging.handlers import WatchedFileHandler
 
+from transcoder.settings import settings
+
 FOLDER_TYPE_MAP = {
     "Animated TV Shows": "animation",
     "Movies": "movie",
@@ -46,11 +48,18 @@ def _delete_old_file(path: str, max_attempts: int = 5) -> None:
             break
 
 
-log_handler = WatchedFileHandler("/var/log/transcoder/transcoder.log")
-formatter = logging.Formatter(
-    "%(asctime)s - [%(levelname)s] %(message)s", "%b %d %H:%M:%S"
-)
-log_handler.setFormatter(formatter)
+def _move_completed_file(old_path: str, new_path: str, max_attempts: int = 5) -> None:
+    attempts = 0
+    while attempts < max_attempts:
+        attempts += 1
+        try:
+            os.rename(old_path, new_path)
+        except PermissionError:
+            time.sleep(FILE_IN_USE_DELAY)
+        else:
+            break
+    subprocess.run(["chown", f"{settings.puid}:{settings.pgid}", new_path], check=True)
+    subprocess.run(["chmod", "775", new_path], check=True)
 
 
 class Video:
@@ -167,16 +176,7 @@ class Video:
         self._log(f"Params: {params}", level=logging.DEBUG)
 
         base_path, extension = os.path.splitext(self.path)
-        if extension_matches(extension, Video.TARGET_EXTENSION):
-            temp_path = f"{base_path}.{self.TEMP_EXTENSION}"
-            self._log(
-                f"Renaming file to {temp_path} as file already has target extension",
-                level=logging.DEBUG,
-            )
-            os.rename(self.path, temp_path)
-            self.path = temp_path
-
-        output_path = f"{base_path}.{Video.TARGET_EXTENSION}"
+        output_path = f"{base_path}.tmp"
         success = True
         try:
             args = [
@@ -192,6 +192,8 @@ class Video:
                 "0:a?",
                 "-map",
                 "0:V",
+                "-f",
+                self.TARGET_EXTENSION,
             ]
             if not drop_subs:
                 args += ["-map", "0:s?"]
@@ -203,7 +205,9 @@ class Video:
             if result.returncode == 0:
                 self._log("Successfully Transcoded")
                 _delete_old_file(self.path)
-                subprocess.run(["chmod", "a+rw", output_path])
+                _move_completed_file(
+                    output_path, f"{base_path}.{Video.TARGET_EXTENSION}"
+                )
             else:
                 # TODO: Better exception
                 raise Exception(
@@ -212,21 +216,10 @@ class Video:
                 )
         except BaseException:
             success = False
-            self._log("Transcode Failed", level=logging.ERROR)
+            self.LOGGER.exception("Transcode Failed")
             if os.path.exists(output_path):
                 self._log("Deleting partial output file")
                 _delete_old_file(output_path)
-            base_path, extension = os.path.splitext(self.path)
-            if extension_matches(extension, Video.TEMP_EXTENSION) and os.path.exists(
-                self.path
-            ):
-                new_path = f"{base_path}.{Video.TARGET_EXTENSION}"
-                self._log(
-                    f"Renaming file from {self.path} to {new_path}",
-                    level=logging.DEBUG,
-                )
-                os.rename(self.path, new_path)
-                self.path = new_path
             if not drop_subs:
                 self._log("Retrying without subtitles")
                 return self.transcode(drop_subs=True)

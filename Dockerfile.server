@@ -1,0 +1,17 @@
+FROM willprice/nvidia-ffmpeg:latest
+
+# Install `uv`
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+ADD https://astral.sh/uv/install.sh /uv-installer.sh
+RUN sh /uv-installer.sh && rm /uv-installer.sh
+ENV PATH="/root/.local/bin/:$PATH"
+
+# Copy project files including uv.lock
+COPY . /app
+WORKDIR /app
+
+# Install dependencies using `uv` and create a virtual environment
+RUN uv sync
+
+# Run webserver
+ENTRYPOINT ["uv", "run", "uvicorn", "transcoder.main:app", "--host", "0.0.0.0", "--port", "8000"]
