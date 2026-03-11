@@ -4,9 +4,12 @@ import logging
 import os
 import subprocess
 import time
-from logging.handlers import WatchedFileHandler
+
+from opentelemetry import trace
 
 from transcoder.settings import settings
+
+tracer = trace.get_tracer(__name__)
 
 FOLDER_TYPE_MAP = {
     "Animated TV Shows": "animation",
@@ -160,69 +163,86 @@ class Video:
 
     def transcode(self, drop_subs: bool = False) -> bool:
         # TODO: timeout? could do on subprocess.run
-
         start = time.time()
 
-        params = self._get_params()
-        if params is None:
-            self._log("No Transcode Required")
-            return False
-        if drop_subs:
-            params.pop("c:s")
-        self._log(f"Params: {params}", level=logging.DEBUG)
+        with tracer.start_as_current_span("transcode") as span:
+            span.set_attribute("transcode.path", self.path)
+            span.set_attribute("transcode.media_type", self.type)
+            span.set_attribute("transcode.drop_subs", drop_subs)
 
-        base_path, extension = os.path.splitext(self.path)
-        output_path = f"{base_path}.tmp"
-        success = True
-        try:
-            args = [
-                "ffmpeg",
-                "-hide_banner",
-                "-y",
-                "-v",
-                "error",
-                "-stats",
-                "-i",
-                self.path,
-                "-map",
-                "0:a?",
-                "-map",
-                "0:V",
-                "-f",
-                self.TARGET_EXTENSION,
-            ]
-            if not drop_subs:
-                args += ["-map", "0:s?"]
-            for flag, value in params.items():
-                args += ["-" + flag, value]
-            args += [output_path]
+            params = self._get_params()
+            if params is None:
+                self._log("No Transcode Required")
+                span.set_attribute("transcode.skipped", True)
+                return False
 
-            result = subprocess.run(args)
-            if result.returncode == 0:
-                self._log("Successfully Transcoded")
-                _delete_old_file(self.path)
-                _move_completed_file(
-                    output_path, f"{base_path}.{Video.TARGET_EXTENSION}"
-                )
-            else:
-                # TODO: Better exception
-                raise Exception(
-                    "Transcode Failed with command: ",
-                    subprocess.list2cmdline(result.args),
-                )
-        except BaseException:
-            success = False
-            self.LOGGER.exception("Transcode Failed")
-            if os.path.exists(output_path):
-                self._log("Deleting partial output file")
-                _delete_old_file(output_path)
-            if not drop_subs:
-                self._log("Retrying without subtitles")
-                return self.transcode(drop_subs=True)
-        finally:
-            runtime = datetime.timedelta(seconds=int(round(time.time() - start)))
-            self._log(f"Time taken: {runtime}", level=logging.DEBUG)
-        return success
+            span.set_attribute("transcode.skipped", False)
+            if "c:v" in params:
+                span.set_attribute("transcode.video_codec", params["c:v"])
+            if "b:v" in params:
+                span.set_attribute("transcode.target_bitrate", params["b:v"])
+
+            if drop_subs:
+                params.pop("c:s")
+            self._log(f"Params: {params}", level=logging.DEBUG)
+
+            base_path, extension = os.path.splitext(self.path)
+            output_path = f"{base_path}.tmp"
+            success = True
+            try:
+                args = [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-y",
+                    "-v",
+                    "error",
+                    "-stats",
+                    "-i",
+                    self.path,
+                    "-map",
+                    "0:a?",
+                    "-map",
+                    "0:V",
+                    "-f",
+                    self.TARGET_EXTENSION,
+                ]
+                if not drop_subs:
+                    args += ["-map", "0:s?"]
+                for flag, value in params.items():
+                    args += ["-" + flag, value]
+                args += [output_path]
+
+                result = subprocess.run(args)
+                if result.returncode == 0:
+                    self._log("Successfully Transcoded")
+                    span.set_attribute("transcode.success", True)
+                    _delete_old_file(self.path)
+                    _move_completed_file(
+                        output_path, f"{base_path}.{Video.TARGET_EXTENSION}"
+                    )
+                else:
+                    # TODO: Better exception
+                    raise Exception(
+                        "Transcode Failed with command: ",
+                        subprocess.list2cmdline(result.args),
+                    )
+            except BaseException as exc:
+                success = False
+                span.set_attribute("transcode.success", False)
+                span.record_exception(exc)
+                span.set_status(trace.StatusCode.ERROR, str(exc))
+                self.LOGGER.exception("Transcode Failed")
+                if os.path.exists(output_path):
+                    self._log("Deleting partial output file")
+                    _delete_old_file(output_path)
+                if not drop_subs:
+                    self._log("Retrying without subtitles")
+                    return self.transcode(drop_subs=True)
+            finally:
+                duration = time.time() - start
+                runtime = datetime.timedelta(seconds=int(round(duration)))
+                self._log(f"Time taken: {runtime}", level=logging.DEBUG)
+            return success
 
     @classmethod
     def transcode_from_path(cls, path: str, video_type: str | None = None) -> bool:

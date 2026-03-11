@@ -6,15 +6,20 @@ from typing import TypedDict, Any, NotRequired
 
 _COMMAND = [
     "ffprobe",
-    "-select_streams", "v:0",
-    "-show_entries", "stream=codec_name,width,height,bit_rate",
-    "-of", "json",
+    "-select_streams",
+    "v:0",
+    "-show_entries",
+    "stream=codec_name,width,height,bit_rate",
+    "-of",
+    "json",
 ]
 
 _BIT_RATE_COMMAND = [
     "ffprobe",
-    "-show_entries", "format=bit_rate:stream=codec_type,bit_rate",
-    "-of", "json",
+    "-show_entries",
+    "format=bit_rate:stream=codec_type,bit_rate",
+    "-of",
+    "json",
 ]
 
 
@@ -47,7 +52,9 @@ class _FFProbeBitRateResponse(TypedDict):
 def _calculate_bitrate(data: _FFProbeBitRateResponse) -> int:
     total_bit_rate = int(data["format"]["bit_rate"])
     for stream in data["streams"]:
-        if (bit_rate := stream.get("bit_rate")) is not None and stream["bit_rate"] != "video":
+        if (bit_rate := stream.get("bit_rate")) is not None and stream[
+            "bit_rate"
+        ] != "video":
             total_bit_rate -= int(bit_rate)
     return total_bit_rate
 
@@ -65,6 +72,7 @@ def _execute_command(command: list[str]) -> Any:
         raise RuntimeError(f"FFprobe failed: {e.stderr.strip()}") from e
     return json.loads(result.stdout)
 
+
 def _execute_ffprobe(path: Path) -> _FFProbeResponse:
     return _execute_command(_COMMAND + [str(path)])
 
@@ -79,6 +87,7 @@ class VideoInfo:
     width: int
     height: int
     bit_rate: int
+
 
 def get_video_info(path: Path):
     if not path.exists() or not path.is_file():
@@ -96,6 +105,3 @@ def get_video_info(path: Path):
         height=stream["height"],
         bit_rate=bit_rate,
     )
-
-
-

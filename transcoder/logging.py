@@ -4,18 +4,12 @@ from logging.handlers import WatchedFileHandler
 
 from transcoder.settings import settings
 
+LOG_FORMAT = (
+    "%(asctime)s - %(name)s - %(levelname)s"
+    " - trace_id=%(otelTraceID)s span_id=%(otelSpanID)s"
+    " - %(message)s"
+)
+
 
 def configure_logging() -> None:
-    stream_handler = logging.StreamHandler(sys.stdout)
-    file_handler = logging.handlers.TimedRotatingFileHandler(
-        settings.log_path,
-        when="D",
-        interval=1,
-        backupCount=7,
-    )
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    file_handler.setFormatter(formatter)
-    stream_handler.setFormatter(formatter)
-    logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, stream_handler])
+    logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)

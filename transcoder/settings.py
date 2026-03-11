@@ -8,9 +8,6 @@ class Settings(BaseSettings):
     puid: int = 13015
     pgid: int = 13000
 
-    # Logs
-    log_path: str = "./transcoder-server.log"
-
     # Redis
     redis_host: str = "redis"
     redis_port: int = 6379
@@ -22,6 +19,10 @@ class Settings(BaseSettings):
     # Sonarr
     sonarr_base_url: str = "http://sonarr:8989"
     sonarr_api_key: SecretStr
+
+    # OpenTelemetry
+    otel_service_name: str = "transcoder"
+    otel_exporter_endpoint: str = "http://alloy:4317"
 
 
 settings = Settings()

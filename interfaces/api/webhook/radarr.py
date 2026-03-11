@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 from pydantic import BaseModel
 
 from service.movie_downloaded import movie_downloaded
@@ -19,7 +19,10 @@ class RadarrWebhook(BaseModel):
 
 
 @router.post("", status_code=status.HTTP_200_OK)
-async def radarr_webhook(payload: RadarrWebhook):
+async def radarr_webhook(request: Request, payload: RadarrWebhook):
+    raw_body = await request.body()
+    logger.info("Radarr webhook received: %s", raw_body.decode())
+
     if payload.eventType == "Test":
         logger.info("Received Radarr test webhook")
         return {"result": "success"}

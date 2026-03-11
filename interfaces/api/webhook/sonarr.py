@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Request, status
 from pydantic import BaseModel
 
 from service.episode_downloaded import episode_downloaded
@@ -19,7 +19,10 @@ class SonarrWebhook(BaseModel):
 
 
 @router.post("", status_code=status.HTTP_200_OK)
-async def sonarr_webhook(payload: SonarrWebhook):
+async def sonarr_webhook(request: Request, payload: SonarrWebhook):
+    raw_body = await request.body()
+    logger.info("Sonarr webhook received: %s", raw_body.decode())
+
     if payload.eventType == "Test":
         logger.info("Received Sonarr test webhook")
         return {"result": "success"}
