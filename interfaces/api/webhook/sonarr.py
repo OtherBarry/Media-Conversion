@@ -20,8 +20,7 @@ class SonarrWebhook(BaseModel):
 
 @router.post("", status_code=status.HTTP_200_OK)
 async def sonarr_webhook(request: Request, payload: SonarrWebhook):
-    raw_body = await request.body()
-    logger.info("Sonarr webhook received: %s", raw_body.decode())
+    logger.info("Radarr webhook received: %s", await request.json())
 
     if payload.eventType == "Test":
         logger.info("Received Sonarr test webhook")

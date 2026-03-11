@@ -20,8 +20,7 @@ class RadarrWebhook(BaseModel):
 
 @router.post("", status_code=status.HTTP_200_OK)
 async def radarr_webhook(request: Request, payload: RadarrWebhook):
-    raw_body = await request.body()
-    logger.info("Radarr webhook received: %s", raw_body.decode())
+    logger.info("Radarr webhook received: %s", await request.json())
 
     if payload.eventType == "Test":
         logger.info("Received Radarr test webhook")
