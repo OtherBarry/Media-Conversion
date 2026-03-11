@@ -13,5 +13,3 @@ WORKDIR /app
 # Install dependencies using `uv` and create a virtual environment
 RUN uv sync
 
-# Run webserver
-ENTRYPOINT ["uv", "run", "uvicorn", "transcoder.main:app", "--host", "0.0.0.0", "--port", "8000"]
