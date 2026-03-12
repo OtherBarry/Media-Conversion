@@ -15,20 +15,20 @@ class SonarrEpisode(BaseModel):
 
 class SonarrWebhook(BaseModel):
     eventType: str
-    episode: SonarrEpisode | None = None
+    episodeFile: SonarrEpisode | None = None
 
 
 @router.post("", status_code=status.HTTP_200_OK)
 async def sonarr_webhook(request: Request, payload: SonarrWebhook):
-    logger.info("Radarr webhook received: %s", await request.json())
+    logger.info("Sonarr webhook received: %s", await request.json())
 
     if payload.eventType == "Test":
         logger.info("Received Sonarr test webhook")
         return {"result": "success"}
     if payload.eventType == "Download":
-        if payload.episode is None:
+        if payload.episodeFile is None:
             raise ValueError("Missing episode in payload")
-        await episode_downloaded(payload.episode.id)
+        await episode_downloaded(payload.episodeFile.id)
     else:
         logger.warning("Received Sonarr webhook event type %s", payload.eventType)
         raise ValueError("Invalid event type")
