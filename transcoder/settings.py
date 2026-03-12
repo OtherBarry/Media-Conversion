@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # OpenTelemetry
     otel_service_name: str = "transcoder"
-    otel_exporter_endpoint: str = "http://alloy:4317"
+    otel_exporter_endpoint: str = "http://alloy:4318"
 
 
 settings = Settings()
