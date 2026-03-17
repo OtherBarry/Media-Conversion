@@ -24,7 +24,7 @@ class SonarrClient:
         )
 
     async def get_episode_path(self, episode_id: int) -> Path:
-        response = await self._client.get(f"/api/v3/episode/{episode_id}")
+        response = await self._client.get(f"/api/v3/episodefile/{episode_id}")
         response.raise_for_status()
         data: _GetEpisodeResponse = response.json()
         if data["hasFile"]:

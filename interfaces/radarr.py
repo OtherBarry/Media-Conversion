@@ -24,7 +24,7 @@ class RadarrClient:
         )
 
     async def get_movie_path(self, movie_id: int) -> Path:
-        response = await self._client.get(f"/api/v3/movie/{movie_id}")
+        response = await self._client.get(f"/api/v3/moviefile/{movie_id}")
         response.raise_for_status()
         data: _GetMovieResponse = response.json()
         if data["hasFile"]:
