@@ -1,5 +1,6 @@
 import logging
 
+from fastapi import FastAPI
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -54,6 +55,6 @@ def configure_telemetry() -> None:
     )
 
 
-def instrument_fastapi(app):
+def instrument_fastapi(app: FastAPI) -> None:
     """Instrument a FastAPI app instance. Call after app creation."""
     FastAPIInstrumentor.instrument_app(app)

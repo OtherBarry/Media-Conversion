@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from interfaces.api.webhook import router as webhook_router
@@ -7,7 +8,7 @@ from transcoder.observability import instrument_fastapi
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     on_startup()
     yield
     on_shutdown()

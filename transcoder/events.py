@@ -9,14 +9,14 @@ from transcoder.observability import configure_telemetry
 logger = logging.getLogger(__name__)
 
 
-def on_startup():
+def on_startup() -> None:
     configure_logging()
     configure_telemetry()
     wire_dependencies()
     logger.info("Started up")
 
 
-def on_shutdown():
+def on_shutdown() -> None:
     logger.info("Shutting down")
     tracer_provider = trace.get_tracer_provider()
     if hasattr(tracer_provider, "shutdown"):

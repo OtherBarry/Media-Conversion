@@ -89,7 +89,7 @@ class VideoInfo:
     bit_rate: int
 
 
-def get_video_info(path: Path):
+def get_video_info(path: Path) -> VideoInfo:
     if not path.exists() or not path.is_file():
         raise FileNotFoundError(f"File not found: {path}")
     ffprobe_data = _execute_ffprobe(path)

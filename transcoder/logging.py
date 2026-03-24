@@ -1,8 +1,5 @@
 import logging
-import sys
-from logging.handlers import WatchedFileHandler
 
-from transcoder.settings import settings
 
 LOG_FORMAT = (
     "%(asctime)s - %(name)s - %(levelname)s"

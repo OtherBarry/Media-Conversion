@@ -1,4 +1,3 @@
-from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 
 
@@ -11,14 +10,6 @@ class Settings(BaseSettings):
     # Redis
     redis_host: str = "redis"
     redis_port: int = 6379
-
-    # Radarr
-    radarr_base_url: str = "http://radarr:7878"
-    radarr_api_key: SecretStr
-
-    # Sonarr
-    sonarr_base_url: str = "http://sonarr:8989"
-    sonarr_api_key: SecretStr
 
     # OpenTelemetry
     otel_service_name: str = "transcoder"

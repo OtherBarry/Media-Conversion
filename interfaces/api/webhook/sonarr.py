@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Request, status
 from pydantic import BaseModel
@@ -10,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class SonarrEpisode(BaseModel):
-    id: int
+    path: Path
 
 
 class SonarrWebhook(BaseModel):
@@ -19,7 +20,7 @@ class SonarrWebhook(BaseModel):
 
 
 @router.post("", status_code=status.HTTP_200_OK)
-async def sonarr_webhook(request: Request, payload: SonarrWebhook):
+async def sonarr_webhook(request: Request, payload: SonarrWebhook) -> dict[str, str]:
     logger.info("Sonarr webhook received: %s", await request.json())
 
     if payload.eventType == "Test":
@@ -28,7 +29,7 @@ async def sonarr_webhook(request: Request, payload: SonarrWebhook):
     if payload.eventType == "Download":
         if payload.episodeFile is None:
             raise ValueError("Missing episode in payload")
-        await episode_downloaded(payload.episodeFile.id)
+        await episode_downloaded(payload.episodeFile.path)
     else:
         logger.warning("Received Sonarr webhook event type %s", payload.eventType)
         raise ValueError("Invalid event type")
